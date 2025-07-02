@@ -6,30 +6,18 @@ pragma solidity 0.8.24;
 import {FunctionsClient} from "@chainlink/contracts@1.4.0/src/v0.8/functions/v1_0_0/FunctionsClient.sol";
 import {FunctionsRequest} from "@chainlink/contracts@1.4.0/src/v0.8/functions/v1_0_0/libraries/FunctionsRequest.sol";
 
-contract WeatherFunctions is FunctionsClient {
+interface IWeatherNft {
+    function mint(address to, string memory city, string memory weather) external;
+    function updateSVG(uint256 tokenId, string memory city, string memory weather) external;
+}
+
+contract WeatherFunctions is FunctionsClient  {
     using FunctionsRequest for FunctionsRequest.Request;
 
     // State variables to store the last request ID, response, and error
     bytes32 public lastRequestId;
     bytes public lastResponse;
     bytes public lastError;
-
-    struct RequestStatus {
-        bool fulfilled; // whether the request has been successfully fulfilled
-        bool exists; // whether a requestId exists
-        bytes response;
-        bytes err;
-    }
-    mapping(bytes32 => RequestStatus) public requests; /* requestId --> requestStatus */          
-    bytes32[] public requestIds;
-
-    // Event to log responses
-    event Response(
-        bytes32 indexed requestId,
-        string temperature,
-        bytes response,
-        bytes err
-    );
 
     // Hardcoded for Fuji
     // Supported networks https://docs.chain.link/chainlink-functions/supported-networks
@@ -47,7 +35,7 @@ contract WeatherFunctions is FunctionsClient {
     string public source =
         "const city = args[0];"
         "const apiResponse = await Functions.makeHttpRequest({"
-        "url: `https://wttr.in/${city}?format=3&m`,"
+        "url: `https://wttr.in/${city}?format=1&m`,"
         "responseType: 'text'"
         "});"
         "if (apiResponse.error) {"
@@ -57,17 +45,15 @@ contract WeatherFunctions is FunctionsClient {
         "return Functions.encodeString(data);";
     string public lastCity;    
     string public lastTemperature;
+    address public lastNftAddress;
     address public lastSender;
 
-    struct CityStruct {
-        address sender;
-        uint timestamp;
-        string name;
-        string temperature;
-    }
-    CityStruct[] public cities;
-    mapping(string => uint256) public cityIndex;
-    mapping(bytes32 => string) public request_city; /* requestId --> city*/
+    // Event to mint NFT
+    event MintIt(
+        address indexed nftAddress,
+        string city,
+        string temperature
+    );
 
     constructor(uint64 functionsSubscriptionId) FunctionsClient(router) {
         subscriptionId = functionsSubscriptionId;      
@@ -92,25 +78,7 @@ contract WeatherFunctions is FunctionsClient {
             donID
         );
         lastCity = _city;
-        request_city[lastRequestId] = _city;
-
-        CityStruct memory auxCityStruct = CityStruct({
-            sender: msg.sender,
-            timestamp: 0,
-            name: _city,
-            temperature: ""            
-        });
-        cities.push(auxCityStruct);
-        cityIndex[_city] = cities.length-1;
-
-        requests[lastRequestId] = RequestStatus({
-            exists: true,
-            fulfilled: false,
-            response: "",
-            err: ""
-        });
-        requestIds.push(lastRequestId);
-
+        lastSender = msg.sender;
         return lastRequestId;
     }
 
@@ -120,43 +88,50 @@ contract WeatherFunctions is FunctionsClient {
         bytes memory response,
         bytes memory err
     ) internal override {
-        require(requests[requestId].exists, "request not found");
-
         lastError = err;
         lastResponse = response;
+        lastTemperature = removeLF(string(response));
 
-        requests[requestId].fulfilled = true;
-        requests[requestId].response = response;
-        requests[requestId].err = err;
-
-        string memory auxCity = request_city[requestId];
-        lastTemperature = string(response);
-        cities[cityIndex[auxCity]].temperature = lastTemperature;
-        cities[cityIndex[auxCity]].timestamp = block.timestamp;
-
-        // Emit an event to log the response
-        emit Response(requestId, lastTemperature, lastResponse, lastError);
+        emit MintIt(lastNftAddress, lastCity, lastTemperature);
     }
 
-	function getCity(string memory city) public view returns (CityStruct memory) {
-    	return cities[cityIndex[city]];
-	}
+    function setupNFT (address _nftAddress) public {
+        lastNftAddress = _nftAddress;
+    }
 
-	function listAllCities() public view returns (CityStruct[] memory) {
-    	return cities;
-	}
+    function mintNFT () public {
+        require (lastNftAddress != address(0), "NFT Address not set.");
+        IWeatherNft nft = IWeatherNft(lastNftAddress);
+        nft.mint(lastSender, lastCity, lastTemperature);
+    }
 
-    function listCities(uint start, uint end) public view returns (CityStruct[] memory) {
-        if (end > cities.length)
-            end = cities.length-1;
-        require (start <= end, "start must <= end");
-        uint cityCount = end - start + 1;
-        CityStruct[] memory citiesAux = new CityStruct[](cityCount);
+    function updateNFT (uint256 tokenId) public {
+        require (lastNftAddress != address(0), "NFT Address not set.");
+        IWeatherNft nft = IWeatherNft(lastNftAddress);
+        nft.updateSVG(tokenId, lastCity, lastTemperature);
+    }
 
-        for (uint i = start; i < (end + 1); i++) {
-            citiesAux[i-start] = cities[i];
+    function removeLF(string memory input) private pure returns (string memory) {
+        bytes memory inputBytes = bytes(input);
+        
+        // Count how many non-LF characters
+        uint count = 0;
+        for (uint i = 0; i < inputBytes.length; i++) {
+            if (inputBytes[i] != 0x0A) {
+                count++;
+            }
         }
-        return citiesAux;
+
+        // Create new bytes array without LF
+        bytes memory result = new bytes(count);
+        uint j = 0;
+        for (uint i = 0; i < inputBytes.length; i++) {
+            if (inputBytes[i] != 0x0A) {
+                result[j] = inputBytes[i];
+                j++;
+            }
+        }
+        return string(result);
     }
 
 }

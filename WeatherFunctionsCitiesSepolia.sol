@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-// Deploy on Celo Alfajores
+// Deploy on Ethereum Sepolia
 
 import {FunctionsClient} from "@chainlink/contracts@1.4.0/src/v0.8/functions/v1_0_0/FunctionsClient.sol";
 import {FunctionsRequest} from "@chainlink/contracts@1.4.0/src/v0.8/functions/v1_0_0/libraries/FunctionsRequest.sol";
 
-contract WeatherFunctions is FunctionsClient {
+contract WeatherFunctionsCities is FunctionsClient {
     using FunctionsRequest for FunctionsRequest.Request;
 
     // State variables to store the last request ID, response, and error
@@ -31,11 +31,11 @@ contract WeatherFunctions is FunctionsClient {
         bytes err
     );
 
-    // Hardcoded for Alfajores
+    // Hardcoded for Sepolia
     // Supported networks https://docs.chain.link/chainlink-functions/supported-networks
-    address router = 0x53BA5D8E5aab0cf9589aCE139666Be2b9Fd268e2;
+    address router = 0xb83E47C2bC239B3bf370bc41e1459A34b41238D0;
     bytes32 donID =
-        0x66756e2d63656c6f2d616c66616a6f7265732d31000000000000000000000000;
+        0x66756e2d657468657265756d2d7365706f6c69612d3100000000000000000000;
 
     //Callback gas limit
     uint32 gasLimit = 300000;
