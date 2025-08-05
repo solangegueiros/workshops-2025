@@ -74,9 +74,14 @@ contract SolStable is ERC20, AutomationCompatibleInterface {
         require(burnAmount > 0, "Amount must be greater than 0");
         uint256 ethPrice = getLatestPrice();
 
-        // Calculate equivalent ETH to return, with proper decimal normalization
-        uint256 ethToReturn = ((burnAmount * 1 ether / 1e8) / ethPrice) / DECIMALS_FACTOR;
-        ethToReturn = (ethToReturn * COLLATERAL_RATIO) / 100;
+        // Convert burnAmount (2 decimals) into full USD (18 decimals)
+        uint256 burnUSD = (burnAmount * 1e18) / DECIMALS_FACTOR;
+
+        // Apply collateral ratio of 150% (multiply by 150, divide by 100)
+        uint256 collateralUSD = (burnUSD * COLLATERAL_RATIO) / 100;
+
+        // Convert USD to ETH: ETH = (USD * 1e8) / priceFeed (with 8 decimals)
+        uint256 ethToReturn = (collateralUSD * 1e8) / ethPrice;
         return ethToReturn;
     }
 
